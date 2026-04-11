@@ -27,4 +27,5 @@ jobs:
         env:
           SENDKEY: ${{ secrets.SENDKEY }}
           SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
           COOKIES: ${{ secrets.COOKIES }}
