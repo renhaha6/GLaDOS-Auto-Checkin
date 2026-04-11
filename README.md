@@ -10,7 +10,7 @@
 - ✅ **每天自动签到**
 - 🔁 **已签到自动识别，不会报错**
 - 👥 **支持多个账号**
-- 📬 **可选签到结果推送（PushDeer）**
+- 📬 **可选签到结果推送（PushDeer / Server酱 / Bark）**
 - 🆓 **完全免费，使用 GitHub Actions**
 
 ------
@@ -76,7 +76,9 @@ koa:sess=xxxxxx; koa:sess.sig=yyyyyy
 
 ### （可选）第四步：开启签到结果推送
 
-如果你想每天收到签到通知（可选）：
+如果你想每天收到签到通知（可选），支持以下方式：
+
+#### 1）PushDeer
 
 1. 注册 PushDeer：https://www.pushdeer.com
 2. 获取你的 `SENDKEY`
@@ -85,7 +87,24 @@ koa:sess=xxxxxx; koa:sess.sig=yyyyyy
 - **Name**：`SENDKEY`
 - **Value**：你的 PushDeer key
 
-不填也没关系，只是不会推送。
+#### 2）Server 酱（Turbo）
+
+1. 打开 Server 酱 Turbo：https://sct.ftqq.com
+2. 获取你的 `SendKey`
+3. 在 GitHub Secrets 中添加：
+
+- **Name**：`SERVERCHAN_KEY`
+- **Value**：你的 SendKey
+
+#### 3）Bark
+
+1. iOS 安装 Bark 客户端，并在 App 内复制你的 key（或包含 key 的链接）
+2. 在 GitHub Secrets 中添加：
+
+- **Name**：`BARK_KEY`
+- **Value**：你的 Bark key（例如 `xxxxxxxxxxxx`）
+
+三种推送方式可同时配置；若都不填也没关系，只是不会推送。
 
 ------
 
@@ -114,11 +133,11 @@ cookie_账号1 & cookie_账号2 & cookie_账号3
 项目默认设置为：
 
 ```
-每天 UTC 04:00 自动运行
+每天 UTC 01:55 自动运行
 ```
 
 换算成北京时间：
 
-> 🕛 **每天中午 12 点自动签到**
+> 🕘 **每天上午 09:55 自动签到**
 
 你无需做任何操作，它会每天自动运行。
