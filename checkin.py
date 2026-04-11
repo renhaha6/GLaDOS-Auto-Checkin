@@ -137,6 +137,16 @@ def get_total_points(session: requests.Session, headers: dict):
         return None
 
 
+def format_points(value):
+    """格式化积分，去掉无意义尾随 0"""
+    if isinstance(value, Decimal):
+        text = format(value, "f")
+    else:
+        text = str(value)
+    text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
 def main():
     # 获取推送密钥
     sendkey_deer = os.getenv("SENDKEY", "")
@@ -178,7 +188,12 @@ def main():
 
             if "got" in msg_lower:
                 ok += 1
-                points = j.get("points", "-")
+                points_raw = j.get("points")
+                if points_raw is not None:
+                    try:
+                        points = format_points(Decimal(str(points_raw)))
+                    except (InvalidOperation, TypeError, ValueError):
+                        points = str(points_raw)
                 status = "✅ 成功"
             elif "repeat" in msg_lower or "already" in msg_lower:
                 repeat += 1
@@ -196,8 +211,8 @@ def main():
 
             after_points = get_total_points(session, headers)
             if before_points is not None and after_points is not None:
-                gained = str(after_points - before_points)
-                points = str(after_points)
+                gained = format_points(after_points - before_points)
+                points = format_points(after_points)
 
         except Exception:
             fail += 1
