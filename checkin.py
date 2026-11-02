@@ -8,13 +8,13 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import quote
 
 
-CHECKIN_URL = "https://glados.cloud/api/user/checkin"
-STATUS_URL = "https://glados.cloud/api/user/status"
-POINTS_URL = "https://glados.cloud/api/user/points"
+CHECKIN_URL = "https://glados.network/api/user/checkin"
+STATUS_URL = "https://glados.network/api/user/status"
+POINTS_URL = "https://glados.network/api/user/points"
 
 HEADERS_BASE = {
-    "origin": "https://glados.cloud",
-    "referer": "https://glados.cloud/console/checkin",
+    "origin": "https://glados.network",
+    "referer": "https://glados.network/console/checkin",
     "user-agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -23,7 +23,7 @@ HEADERS_BASE = {
     "content-type": "application/json;charset=UTF-8",
 }
 
-PAYLOAD = {"token": "glados.cloud"}
+PAYLOAD = {"token": "glados.network"}
 TIMEOUT = 10
 
 
