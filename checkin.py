@@ -183,10 +183,10 @@ def main():
             )
 
             j = safe_json(r)
-            msg = j.get("message", "")
+            msg = str(j.get("message") or "")
             msg_lower = msg.lower()
 
-            if "got" in msg_lower:
+            if r.ok and j.get("code") == 0:
                 ok += 1
                 points_raw = j.get("points")
                 if points_raw is not None:
@@ -195,12 +195,15 @@ def main():
                     except (InvalidOperation, TypeError, ValueError):
                         points = str(points_raw)
                 status = "✅ 成功"
-            elif "repeat" in msg_lower or "already" in msg_lower:
+            elif r.ok and any(word in msg_lower for word in ("repeat", "already checked", "already check", "已签到", "重复签到", "已经签到")):
                 repeat += 1
                 status = "🔁 已签到"
             else:
                 fail += 1
-                status = "❌ 失败"
+                status = (
+                    f"❌ 失败(HTTP {r.status_code}, code={j.get('code')}, "
+                    f"reason={j.get('reason') or '-'}: {msg or '接口未返回 message'})"
+                )
 
             # 状态接口（允许失败）
             s = session.get(STATUS_URL, headers=headers, timeout=TIMEOUT)
