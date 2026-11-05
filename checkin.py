@@ -2,6 +2,7 @@ import os
 import json
 import time
 import random
+import hashlib
 import requests
 from pypushdeer import PushDeer
 from decimal import Decimal, InvalidOperation
@@ -9,8 +10,13 @@ from urllib.parse import quote
 
 
 CHECKIN_URL = "https://glados.network/api/user/checkin"
+CHALLENGE_URL = "https://glados.network/api/user/checkin/challenge"
 STATUS_URL = "https://glados.network/api/user/status"
 POINTS_URL = "https://glados.network/api/user/points"
+
+# 前端校验：nonce 下发后至少 2.5 秒才允许提交，否则按未验证签到只给 1 分
+PROOF_SALT = "glados-observe-v1"
+MIN_CHALLENGE_AGE = 2.6
 
 HEADERS_BASE = {
     "accept": "application/json, text/plain, */*",
@@ -125,6 +131,28 @@ def safe_json(resp):
         return {}
 
 
+def get_challenge(session: requests.Session, headers: dict):
+    """获取签到 nonce，接口不可用时返回 None（退化为旧版未验证签到）"""
+    try:
+        r = session.get(CHALLENGE_URL, headers=headers, timeout=TIMEOUT)
+        j = safe_json(r)
+        if r.ok and j.get("code") == 0 and j.get("nonce"):
+            return {
+                "nonce": str(j["nonce"]),
+                "ttl": j.get("ttl"),
+                "received_at": time.monotonic(),
+            }
+        print(f"⚠️ 获取 challenge 失败: HTTP {r.status_code}, code={j.get('code')}, message={j.get('message')}")
+    except Exception as e:
+        print(f"⚠️ 获取 challenge 异常: {e}")
+    return None
+
+
+def build_proof(nonce: str) -> str:
+    """proof = SHA256(nonce + '.' + salt) 的小写十六进制"""
+    return hashlib.sha256(f"{nonce}.{PROOF_SALT}".encode()).hexdigest()
+
+
 def get_total_points(session: requests.Session, headers: dict):
     """获取账户当前总积分，失败时返回 None"""
     try:
@@ -143,12 +171,13 @@ def get_total_points(session: requests.Session, headers: dict):
 
 
 def format_points(value):
-    """格式化积分，去掉无意义尾随 0"""
+    """格式化积分，只去掉小数部分无意义的尾随 0"""
     if isinstance(value, Decimal):
         text = format(value, "f")
     else:
         text = str(value)
-    text = text.rstrip("0").rstrip(".")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
     return text or "0"
 
 
@@ -176,33 +205,45 @@ def main():
         points = "-"
         days = "-"
         gained = "?"
+        proof_tag = "none"
 
         try:
             before_points = get_total_points(session, headers)
 
+            payload = dict(PAYLOAD)
+            challenge = get_challenge(session, headers)
+            if challenge:
+                elapsed = time.monotonic() - challenge["received_at"]
+                if elapsed < MIN_CHALLENGE_AGE:
+                    time.sleep(MIN_CHALLENGE_AGE - elapsed)
+                payload["nonce"] = challenge["nonce"]
+                payload["proof"] = build_proof(challenge["nonce"])
+
             r = session.post(
                 CHECKIN_URL,
                 headers=headers,
-                data=json.dumps(PAYLOAD),
+                data=json.dumps(payload),
                 timeout=TIMEOUT,
             )
 
             j = safe_json(r)
             msg = str(j.get("message") or "")
             msg_lower = msg.lower()
+            repeated = bool(j.get("repeated")) or any(
+                word in msg_lower
+                for word in ("repeat", "already checked", "already check", "已签到", "重复签到", "已经签到")
+            )
+            proof_tag = "proof" if challenge else "none"
 
-            if r.ok and j.get("code") == 0:
-                ok += 1
-                points_raw = j.get("points")
-                if points_raw is not None:
-                    try:
-                        points = format_points(Decimal(str(points_raw)))
-                    except (InvalidOperation, TypeError, ValueError):
-                        points = str(points_raw)
-                status = "✅ 成功"
-            elif r.ok and any(word in msg_lower for word in ("repeat", "already checked", "already check", "已签到", "重复签到", "已经签到")):
+            if repeated:
                 repeat += 1
                 status = "🔁 已签到"
+            elif r.ok and j.get("code") == 0:
+                ok += 1
+                status = "✅ 成功"
+            elif r.ok and j.get("code") == 4 and j.get("reason") == "device-mismatch":
+                fail += 1
+                status = "❌ 设备不匹配，请在浏览器重新登录后更新 COOKIES"
             else:
                 fail += 1
                 status = (
@@ -226,7 +267,9 @@ def main():
             fail += 1
             status = "❌ 异常"
 
-        lines.append(f"{idx}. {email} | {status} | 总积分:{points} | 本次+{gained} | 剩余:{days}")
+        lines.append(
+            f"{idx}. {email} | {status} | 总积分:{points} | 本次+{gained} | 剩余:{days} | 验证:{proof_tag}"
+        )
         time.sleep(random.uniform(1, 2))
 
     title = f"GLaDOS 签到完成 ✅{ok} ❌{fail} 🔁{repeat}"
