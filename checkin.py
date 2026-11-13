@@ -140,7 +140,6 @@ def get_challenge(session: requests.Session, headers: dict):
             return {
                 "nonce": str(j["nonce"]),
                 "ttl": j.get("ttl"),
-                "turnstile": j.get("turnstile") or None,
                 "received_at": time.monotonic(),
             }
         print(f"⚠️ 获取 challenge 失败: HTTP {r.status_code}, code={j.get('code')}, message={j.get('message')}")
@@ -207,23 +206,19 @@ def main():
         days = "-"
         gained = "?"
         proof_tag = "none"
-        has_turnstile = False
+        free_cap = 0
 
         try:
             before_points = get_total_points(session, headers)
 
             payload = dict(PAYLOAD)
             challenge = get_challenge(session, headers)
-            has_turnstile = bool(challenge and challenge["turnstile"])
             if challenge:
                 elapsed = time.monotonic() - challenge["received_at"]
                 if elapsed < MIN_CHALLENGE_AGE:
                     time.sleep(MIN_CHALLENGE_AGE - elapsed)
                 payload["nonce"] = challenge["nonce"]
                 payload["proof"] = build_proof(challenge["nonce"])
-                if not has_turnstile:
-                    payload["tsState"] = "off"
-                print(f"ℹ️ challenge turnstile sitekey: {'yes' if has_turnstile else 'no'}")
 
             r = session.post(
                 CHECKIN_URL,
@@ -245,6 +240,8 @@ def main():
                 for word in ("repeat", "already checked", "already check", "已签到", "重复签到", "已经签到")
             )
             proof_tag = "proof" if challenge else "none"
+            breakdown = j.get("breakdown") or {}
+            free_cap = breakdown.get("freeCap") or 0
 
             if repeated:
                 repeat += 1
@@ -278,9 +275,10 @@ def main():
             fail += 1
             status = "❌ 异常"
 
+        cap_note = f" | 免费上限:{free_cap}分" if free_cap else ""
         lines.append(
             f"{idx}. {email} | {status} | 总积分:{points} | 本次+{gained} | 剩余:{days} | "
-            f"验证:{proof_tag} | Turnstile:{'有' if has_turnstile else '无'}"
+            f"验证:{proof_tag}{cap_note}"
         )
         time.sleep(random.uniform(1, 2))
 
