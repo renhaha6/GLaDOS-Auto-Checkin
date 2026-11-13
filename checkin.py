@@ -140,6 +140,7 @@ def get_challenge(session: requests.Session, headers: dict):
             return {
                 "nonce": str(j["nonce"]),
                 "ttl": j.get("ttl"),
+                "turnstile": j.get("turnstile") or None,
                 "received_at": time.monotonic(),
             }
         print(f"⚠️ 获取 challenge 失败: HTTP {r.status_code}, code={j.get('code')}, message={j.get('message')}")
@@ -206,18 +207,23 @@ def main():
         days = "-"
         gained = "?"
         proof_tag = "none"
+        has_turnstile = False
 
         try:
             before_points = get_total_points(session, headers)
 
             payload = dict(PAYLOAD)
             challenge = get_challenge(session, headers)
+            has_turnstile = bool(challenge and challenge["turnstile"])
             if challenge:
                 elapsed = time.monotonic() - challenge["received_at"]
                 if elapsed < MIN_CHALLENGE_AGE:
                     time.sleep(MIN_CHALLENGE_AGE - elapsed)
                 payload["nonce"] = challenge["nonce"]
                 payload["proof"] = build_proof(challenge["nonce"])
+                if not has_turnstile:
+                    payload["tsState"] = "off"
+                print(f"ℹ️ challenge turnstile sitekey: {'yes' if has_turnstile else 'no'}")
 
             r = session.post(
                 CHECKIN_URL,
@@ -227,6 +233,11 @@ def main():
             )
 
             j = safe_json(r)
+            print(
+                f"ℹ️ checkin response: code={j.get('code')}, points={j.get('points')}, "
+                f"repeated={j.get('repeated')}, reason={j.get('reason')}, "
+                f"message={j.get('message')}, breakdown={j.get('breakdown')}"
+            )
             msg = str(j.get("message") or "")
             msg_lower = msg.lower()
             repeated = bool(j.get("repeated")) or any(
@@ -268,7 +279,8 @@ def main():
             status = "❌ 异常"
 
         lines.append(
-            f"{idx}. {email} | {status} | 总积分:{points} | 本次+{gained} | 剩余:{days} | 验证:{proof_tag}"
+            f"{idx}. {email} | {status} | 总积分:{points} | 本次+{gained} | 剩余:{days} | "
+            f"验证:{proof_tag} | Turnstile:{'有' if has_turnstile else '无'}"
         )
         time.sleep(random.uniform(1, 2))
 
